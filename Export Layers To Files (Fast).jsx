@@ -774,19 +774,24 @@ function cropImage(bounds) {
 
 // Load the layer's mask
 function loadLayerMaskAsSelection(layer) {
-    var idsetd = charIDToTypeID("setd");
+	selectLayerById(layer.id);
+    app.activeDocument.activeLayer = layer; // make sure the layer is active
+
     var desc = new ActionDescriptor();
     var ref = new ActionReference();
 
-    ref.putProperty(charIDToTypeID("Chnl"), charIDToTypeID("fsel"));
-    desc.putReference(charIDToTypeID("null"), ref);
+    ref.putProperty(stringIDToTypeID("channel"), stringIDToTypeID("selection"));
+    desc.putReference(stringIDToTypeID("null"), ref);
 
     var ref2 = new ActionReference();
-    ref2.putEnumerated(charIDToTypeID("Chnl"), charIDToTypeID("Chnl"), charIDToTypeID("Msk "));
-    ref2.putIdentifier(charIDToTypeID("Lyr "), layer.id);
+    ref2.putEnumerated(
+        stringIDToTypeID("channel"),
+        stringIDToTypeID("channel"),
+        stringIDToTypeID("mask")
+    );
 
-    desc.putReference(charIDToTypeID("T   "), ref2);
-    executeAction(idsetd, desc, DialogModes.NO);
+    desc.putReference(stringIDToTypeID("to"), ref2);
+    executeAction(stringIDToTypeID("set"), desc, DialogModes.NO);
 }
 
 function layerHasMask(layer) {
@@ -817,6 +822,7 @@ function trimToMask(layer) {
 	log("=== Trim To Mask Debug ===");
 	log("Trimming Layer: " + layer.name);
 	selectLayerById(layer.id);
+    app.activeDocument.activeLayer = layer; // make sure the layer is active
     log("Active Layer NOW: " + doc.activeLayer.name);
 
 	log("Has mask: " + layerHasMask(layer));
@@ -849,10 +855,13 @@ function trimToMask(layer) {
 }
 
 function log(msg) {
-    var file = new File("~/Desktop/ps_debug_log.txt");
-    file.open("a");
-    file.writeln(msg);
-    file.close();
+    var DEBUG_ENABLED = false;
+    if (DEBUG_ENABLED == true) {
+        var file = new File("~/Desktop/ps_debug_log.txt");
+        file.open("a");
+        file.writeln(msg);
+        file.close();
+    }
 }
 
 function trimImage() {
