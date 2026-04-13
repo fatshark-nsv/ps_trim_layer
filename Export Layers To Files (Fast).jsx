@@ -80,9 +80,10 @@ var TrimPrefType = {
     INDIVIDUAL: 2,
     INDIVIDUAL_USE_TRIM: 3,
     COMBINED: 4,
+	INDIVIDUAL_USE_MASK: 5,
 
     values: function() {
-        return [this.INDIVIDUAL, this.INDIVIDUAL_USE_TRIM, this.COMBINED];
+        return [this.INDIVIDUAL, this.INDIVIDUAL_USE_TRIM, this.COMBINED, this.INDIVIDUAL_USE_MASK];
     },
 
     forIndex: function(index) {
@@ -708,7 +709,10 @@ function exportLayers(exportLayerTarget, progressBarWindow) {
                     }
                     if (prefs.trimValue == TrimPrefType.INDIVIDUAL_USE_TRIM) {
                         trimImage();
-                    }
+                    } 
+					else if (prefs.trimValue == TrimPrefType.INDIVIDUAL_USE_MASK) {
+						trimToMask(layer);
+					}
 
                     var folderSafe = true;
                     if (prefs.groupsAsFolders) {
@@ -766,6 +770,89 @@ function cropImage(bounds) {
     } else {
         app.activeDocument.crop(bounds);
     }
+}
+
+// Load the layer's mask
+function loadLayerMaskAsSelection(layer) {
+    var idsetd = charIDToTypeID("setd");
+    var desc = new ActionDescriptor();
+    var ref = new ActionReference();
+
+    ref.putProperty(charIDToTypeID("Chnl"), charIDToTypeID("fsel"));
+    desc.putReference(charIDToTypeID("null"), ref);
+
+    var ref2 = new ActionReference();
+    ref2.putEnumerated(charIDToTypeID("Chnl"), charIDToTypeID("Chnl"), charIDToTypeID("Msk "));
+    ref2.putIdentifier(charIDToTypeID("Lyr "), layer.id);
+
+    desc.putReference(charIDToTypeID("T   "), ref2);
+    executeAction(idsetd, desc, DialogModes.NO);
+}
+
+function layerHasMask(layer) {
+    try {
+        var ref = new ActionReference();
+        ref.putProperty(stringIDToTypeID("property"), stringIDToTypeID("hasUserMask"));
+        ref.putIdentifier(charIDToTypeID("Lyr "), layer.id);
+        return executeActionGet(ref).getBoolean(stringIDToTypeID("hasUserMask"));
+    } catch (e) {
+        return false;
+    }
+}
+
+function selectLayerById(id) {
+    var ref = new ActionReference();
+    ref.putIdentifier(charIDToTypeID("Lyr "), id);
+
+    var desc = new ActionDescriptor();
+    desc.putReference(charIDToTypeID("null"), ref);
+    desc.putBoolean(charIDToTypeID("MkVs"), false);
+
+    executeAction(charIDToTypeID("slct"), desc, DialogModes.NO);
+}
+
+function trimToMask(layer) {
+    var doc = app.activeDocument;
+
+	log("=== Trim To Mask Debug ===");
+	log("Trimming Layer: " + layer.name);
+	selectLayerById(layer.id);
+    log("Active Layer NOW: " + doc.activeLayer.name);
+
+	log("Has mask: " + layerHasMask(layer));
+    if (!layerHasMask(layer)) {
+        // fallback to normal trim
+        trimImage();
+		log("Layer has NO MASK");
+        return;
+    }
+
+    // Load mask as selection
+    loadLayerMaskAsSelection(layer);
+	log("Loaded layer mask " + layer.name);
+	log("Has mask: " + layerHasMask(layer));
+
+    try {
+        var bounds = doc.selection.bounds;
+		log("Bounds: " + bounds);
+
+        // Bounds = [left, top, right, bottom]
+        if (bounds) {
+            doc.crop(bounds);
+        }
+    } catch (e) {
+		log("No selection bounds!");
+        // No valid selection → skip or fallback
+    }
+
+    doc.selection.deselect();
+}
+
+function log(msg) {
+    var file = new File("~/Desktop/ps_debug_log.txt");
+    file.open("a");
+    file.writeln(msg);
+    file.close();
 }
 
 function trimImage() {
@@ -2951,7 +3038,7 @@ function makeMainDialog() {
     cbTrim.helpTip = "Whether to trim before export"; 
     cbTrim.text = "Trim"; 
 
-    var ddTrim_array = ["Each Layer","Each Layer (use trim())","Combined"]; 
+    var ddTrim_array = ["Each Layer","Each Layer (use trim())","Combined", "Each Layer from Mask"]; 
     var ddTrim = grpTrim.add("dropdownlist", undefined, undefined, {name: "ddTrim", items: ddTrim_array}); 
     ddTrim.selection = 0; 
 
